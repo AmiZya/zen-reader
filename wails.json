@@ -1,0 +1,33 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "version": "2",
+  "name": "zen-reader",
+  "outputfilename": "Zen Reader",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "info": {
+    "companyName": "Zen Reader Labs",
+    "productName": "Zen Reader",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright 2026 Zen Reader Labs",
+    "comments": "Classic chapter-based EPUB desktop reader",
+    "fileAssociations": [
+      {
+        "ext": "epub",
+        "name": "EPUB Document",
+        "description": "Electronic Publication",
+        "iconName": "fileIcon",
+        "role": "Editor"
+      }
+    ]
+  },
+  "author": {
+    "name": "Amine Zyad",
+    "email": "amizya@gmail.com"
+  },
+  "postBuildHooks": {
+    "darwin/*": "sh -c 'bin=\"$1\"; appdir=$(dirname \"$(dirname \"$(dirname \"$bin\")\")\"); target=\"$(dirname \"$appdir\")/Zen Reader.app\"; rm -rf \"$target\"; mv \"$appdir\" \"$target\" || true' -- \"${bin}\""
+  }
+}
