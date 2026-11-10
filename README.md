@@ -145,14 +145,12 @@ Tags with a hyphen (for example `v0.2.0-beta.1`) are published as pre-releases. 
 
 ## Known limitations
 
-- Links inside some EPUBs don't work yet when clicked (this is being worked on).
 - Single-book mode only. There's no library manager yet.
-- Scripted EPUB content is disabled on purpose, for safety.
+- Scripts embedded in books are stripped before rendering, for safety.
 - The macOS builds aren't signed or notarized.
 
 ## Roadmap
 
-- [ ] Reliable internal and external link handling for every EPUB layout
 - [ ] Option to respect the book's own colors instead of normalizing them
 - [ ] Library view and recent books
 - [ ] Signed and notarized macOS builds

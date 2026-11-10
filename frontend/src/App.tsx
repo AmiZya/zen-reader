@@ -114,6 +114,11 @@ type EpubBook = {
   };
   spine?: {
     spineItems?: Array<{ href?: string; canonical?: string; url?: string }>;
+    hooks?: {
+      content: {
+        register: (callback: (doc: Document) => void) => void;
+      };
+    };
   };
   renderTo: (element: Element | string, options?: Record<string, unknown>) => EpubRendition;
   section: (target: string) => EpubSection;
@@ -424,15 +429,19 @@ const decodeURIComponentSafe = (value: string): string => {
 
 const resolveInternalBookTarget = (href: string, doc: Document): string | null => {
   const trimmed = href.trim();
-  if (!trimmed || trimmed.startsWith("#") || UNSAFE_LINK_REF.test(trimmed)) {
+  if (!trimmed || UNSAFE_LINK_REF.test(trimmed)) {
     return null;
   }
 
-  const base = doc.querySelector("base")?.getAttribute("href") ?? doc.baseURI ?? "wails://wails/";
+  const base = doc.querySelector("base")?.getAttribute("href") ?? doc.baseURI ?? window.location.href;
 
   try {
     const parsed = new URL(trimmed, base);
-    if (parsed.protocol.toLowerCase() !== "wails:") {
+    // Book-internal URLs resolve to the app's own origin (wails://wails on macOS,
+    // http://wails.localhost on Windows, the dev server in `wails dev`).
+    const isAppOrigin =
+      parsed.origin === window.location.origin || parsed.protocol.toLowerCase() === "wails:";
+    if (!isAppOrigin) {
       return null;
     }
 
@@ -448,6 +457,22 @@ const resolveInternalBookTarget = (href: string, doc: Document): string | null =
     }
     return trimmed;
   }
+};
+
+const sanitizeChapterDocument = (doc: Document) => {
+  doc.querySelectorAll("script, noscript, iframe, object, embed").forEach((node) => node.remove());
+
+  doc.querySelectorAll("*").forEach((element) => {
+    Array.from(element.attributes).forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim();
+      if (name.startsWith("on")) {
+        element.removeAttribute(attribute.name);
+      } else if ((name === "href" || name === "xlink:href" || name === "src") && /^javascript:/i.test(value)) {
+        element.removeAttribute(attribute.name);
+      }
+    });
+  });
 };
 
 const routeLinkHref = (
@@ -470,24 +495,25 @@ const routeLinkHref = (
   }
 
   if (href.startsWith("#")) {
-    const fragment = href.slice(1);
-    const candidates = [fragment, decodeURIComponentSafe(fragment)];
-    for (const id of candidates) {
-      if (!id) {
-        continue;
+    const scrollToFragment = () => {
+      const fragment = href.slice(1);
+      for (const id of [fragment, decodeURIComponentSafe(fragment)]) {
+        const element = id ? doc.getElementById(id) : null;
+        if (element) {
+          element.scrollIntoView({ block: "start" });
+          return;
+        }
       }
+    };
 
-      const element = doc.getElementById(id);
-      if (element) {
-        element.scrollIntoView({ block: "start" });
-        return;
-      }
+    // Route through the reader so epub.js scrolls its own container to the anchor.
+    const sameChapterTarget = resolveInternalBookTarget(href, doc);
+    if (!sameChapterTarget) {
+      scrollToFragment();
+      return;
     }
 
-    void navigate(href).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      onError(`Could not open link: ${message}`);
-    });
+    void navigate(sameChapterTarget).catch(scrollToFragment);
     return;
   }
 
@@ -1235,13 +1261,20 @@ function App() {
       spineEntriesRef.current = parsedSpineEntries;
       setTocTree(buildFallbackToc(parsedSpineEntries));
 
+      // Strip any scripting from the book itself. This is what makes it safe to
+      // let the chapter iframe run our own click handlers below.
+      book.spine?.hooks?.content.register(sanitizeChapterDocument);
+
       const rendition = book.renderTo(readerHostRef.current, {
         width: "100%",
         height: "100%",
         method: "default",
         flow: "scrolled-doc",
         spread: "none",
-        allowScriptedContent: false,
+        // WebKit (macOS) blocks event listeners inside an iframe sandboxed without
+        // allow-scripts, which made every in-book link dead. Book scripts are
+        // removed by sanitizeChapterDocument, so only the reader's handlers run.
+        allowScriptedContent: true,
       });
 
       rendition.hooks.content.register(async (contents) => {

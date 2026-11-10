@@ -101,7 +101,7 @@ Rules:
 
 ## Safety and UX Notes
 
-- Keep `allowScriptedContent: false` by default.
+- `allowScriptedContent` is `true` because WebKit blocks our click handlers in a script-less sandbox; book scripts and inline `on*` handlers are stripped by `sanitizeChapterDocument` (spine content hook). Never remove that sanitizer.
 - Normalize TOC hrefs and fragment targets before display.
 - Handle both EPUB2 (NCX) and EPUB3 nav through epub.js APIs.
 - Keep UI responsive on large chapters.
